@@ -2,6 +2,10 @@
 # Unschedule Configuration for an Experimental Physics Prof
 # =============================================================
 
+[NON-WORK-DEFINITION]
+non_work_categories = Sleep, Family, Commute
+
+# --- Category Definitions ---
 @Teaching: #4682B4
 @Lab: #2E8B57
 @Family: #8A2BE2
@@ -21,7 +25,7 @@ Weekly MTWRF 5p Check Cryostat
 
 # --- Deep Work ---
 @Writing
-Weekly MWF 6a 8a Paper/Proposal
+Weekly MWF 6a 8a Proposal Baloney
 
 # --- Admin ---
 Weekly F 1p 2p Dept. Faculty Mtg @Admin

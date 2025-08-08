@@ -1,0 +1,24 @@
+/* tui.css */
+TimeRangeScreen {
+    align: center middle;
+}
+
+#dialog {
+    padding: 0 1;
+    width: 60;
+    height: 17; /* Increased height to make room for spacer and buttons */
+    border: thick $background 80%;
+    background: $surface;
+}
+
+#dialog_title {
+    text-align: center;
+    width: 100%;
+    padding-bottom: 1;
+}
+
+#dialog_buttons {
+    width: 100%;
+    align: center middle;
+    padding-top: 1;
+}
