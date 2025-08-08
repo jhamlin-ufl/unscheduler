@@ -1,0 +1,43 @@
+# =============================================================
+# Unschedule Configuration for an Experimental Physics Prof
+# =============================================================
+
+@Teaching: #4682B4
+@Lab: #2E8B57
+@Family: #8A2BE2
+@Writing: #D2691E
+@Sleep: #696969
+
+# --- Teaching ---
+@Teaching
+Weekly MWF 9a 10:30a PHY7001 Lecture
+Weekly TR 11a 12:30p Office Hours
+
+# --- Lab & Research ---
+@Lab
+WeekA T 2p 4p Lab Group Mtg
+WeekB T 2p 4p Student Mtgs
+Weekly MTWRF 5p Check Cryostat
+
+# --- Deep Work ---
+@Writing
+Weekly MWF 6a 8a Paper/Proposal
+
+# --- Admin ---
+Weekly F 1p 2p Dept. Faculty Mtg @Admin
+WeekA M 1p 2p Grant Budget Review @Admin
+
+# --- Family & Commute ---
+@Family
+Weekly MTWRFSU 6p 7p Family Dinner
+Weekly W 7p 8p Kids' Soccer
+
+# Commute gets its own auto-color
+Weekly MTWRF 8:30a To Campus @Commute
+Weekly MTWRF 5:15p To Home @Commute
+Weekly F 4:30p School Pickup @Commute
+
+# --- Personal & Sleep ---
+@Sleep
+Weekly MTWRFSU 9:45p Prep for tomorrow
+Weekly MTWRFSU 10p 4a Sleep

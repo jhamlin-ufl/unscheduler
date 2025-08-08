@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "unscheduler"
+version = "0.1.0"
+description = "Program to make and manage an unschedule"
+authors = ["James J. Hamlin"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+python-dateutil = "^2.9.0.post0"
+matplotlib = "^3.10.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
