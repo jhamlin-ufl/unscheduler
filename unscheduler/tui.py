@@ -2,6 +2,8 @@
 import os
 import io
 import re
+import json
+from pathlib import Path
 import contextlib
 import humanize
 from datetime import datetime
@@ -80,6 +82,39 @@ def parse_end_hour(s: str) -> int:
     return dt.hour if dt.minute == 0 else min(dt.hour + 1, 24)  # ceil minutes
 
 
+class SettingsManager:
+    def __init__(self):
+        self.config_dir = Path.home() / '.config' / 'unscheduler'
+        self.config_file = self.config_dir / 'settings.json'
+        self.default_settings = {
+            'orientation': 'Landscape',
+            'time_format': '24h',
+            'start_hour': 3,
+            'end_hour': 22
+        }
+
+    def load_settings(self):
+        """Load settings from file, return defaults if file doesn't exist."""
+        try:
+            if self.config_file.exists():
+                with open(self.config_file, 'r') as f:
+                    return json.load(f)
+            else:
+                return self.default_settings.copy()
+        except Exception:
+            return self.default_settings.copy()
+
+    def save_settings(self, settings):
+        """Save settings to file."""
+        try:
+            self.config_dir.mkdir(parents=True, exist_ok=True)
+            with open(self.config_file, 'w') as f:
+                json.dump(settings, f, indent=2)
+            return True
+        except Exception:
+            return False
+
+
 class UnscheduleApp(App):
     TITLE = "Unschedule Analyzer [LIVE MODE]"
     BINDINGS = [
@@ -105,6 +140,26 @@ class UnscheduleApp(App):
         self.all_commitments, self.all_categories, self.non_work_cats = [], set(), []
         self._reload_timer = None
 
+        # Load persistent settings
+        self.settings_manager = SettingsManager()
+        saved_settings = self.settings_manager.load_settings()
+
+        # Apply loaded settings to reactive properties
+        self.orientation = saved_settings['orientation']
+        self.time_format = saved_settings['time_format']
+        self.start_hour = saved_settings['start_hour']
+        self.end_hour = saved_settings['end_hour']
+
+    def _save_settings(self):
+        """Save current settings to disk."""
+        current_settings = {
+            'orientation': self.orientation,
+            'time_format': self.time_format,
+            'start_hour': self.start_hour,
+            'end_hour': self.end_hour
+        }
+        self.settings_manager.save_settings(current_settings)
+
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Vertical(id="root"):
@@ -123,11 +178,13 @@ class UnscheduleApp(App):
 
     def _maybe_reload_on_save(self) -> None:
         try:
-            current_mod = datetime.fromtimestamp(os.path.getmtime(self.schedule_file_path))
+            current_mod = datetime.fromtimestamp(
+                os.path.getmtime(self.schedule_file_path))
             if current_mod > self.last_file_mod_time:
                 self.run_analysis()
         except FileNotFoundError:
-            self._safe_update("#report_panel", "[bold red]Error: schedule file not found.[/]")
+            self._safe_update(
+                "#report_panel", "[bold red]Error: schedule file not found.[/]")
 
     def _safe_update(self, selector: str, text: str) -> None:
         try:
@@ -143,23 +200,29 @@ class UnscheduleApp(App):
     def run_analysis(self) -> None:
         try:
             # Capture analysis output
-            self.last_file_mod_time = datetime.fromtimestamp(os.path.getmtime(self.schedule_file_path))
+            self.last_file_mod_time = datetime.fromtimestamp(
+                os.path.getmtime(self.schedule_file_path))
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
-                self.all_commitments, self.all_categories, self.non_work_cats, errors = parse_schedule_file(self.schedule_file_path)
+                self.all_commitments, self.all_categories, self.non_work_cats, errors = parse_schedule_file(
+                    self.schedule_file_path)
                 if errors:
-                    self._safe_update("#report_panel", "[bold red]Parsing errors detected.[/]")
+                    self._safe_update(
+                        "#report_panel", "[bold red]Parsing errors detected.[/]")
                     return
                 check_for_overlaps(self.all_commitments)
-                calculate_and_print_stats(self.all_commitments, self.all_categories, self.non_work_cats)
+                calculate_and_print_stats(
+                    self.all_commitments, self.all_categories, self.non_work_cats)
             self._safe_update("#report_panel", out.getvalue())
 
             # Generate calendars
             figsize = (8.5, 11) if self.orientation == "Portrait" else (11, 8.5)
             week_a_events = get_events_for_week(self.all_commitments, "A")
-            create_calendar_pdf(week_a_events, "Week A", self.start_hour, self.end_hour, self.time_format, figsize)
+            create_calendar_pdf(week_a_events, "Week A", self.start_hour,
+                                self.end_hour, self.time_format, figsize)
             week_b_events = get_events_for_week(self.all_commitments, "B")
-            create_calendar_pdf(week_b_events, "Week B", self.start_hour, self.end_hour, self.time_format, figsize)
+            create_calendar_pdf(week_b_events, "Week B", self.start_hour,
+                                self.end_hour, self.time_format, figsize)
             self.last_pdf_gen_time = datetime.now()
             self._safe_update(
                 "#pdf_gen_label",
@@ -170,20 +233,21 @@ class UnscheduleApp(App):
                 f"Source File Modified:  {self.last_file_mod_time.strftime('%Y-%m-%d %H:%M:%S')} ({humanize.naturaltime(self.last_file_mod_time)})",
             )
         except Exception as e:
-            self._safe_update("#report_panel", f"[bold red]An error occurred during analysis:\n{e}[/]")
+            self._safe_update(
+                "#report_panel", f"[bold red]An error occurred during analysis:\n{e}[/]")
 
     # Watchers keep the single status line current
-    def watch_orientation(self, _: str) -> None:
-        self.update_status_line()
+    def watch_orientation(self, old_value: str, new_value: str) -> None:
+        self._save_settings()
 
-    def watch_time_format(self, _: str) -> None:
-        self.update_status_line()
+    def watch_time_format(self, old_value: str, new_value: str) -> None:
+        self._save_settings()
 
-    def watch_start_hour(self) -> None:
-        self.update_status_line()
+    def watch_start_hour(self, old_value: int, new_value: int) -> None:
+        self._save_settings()
 
-    def watch_end_hour(self) -> None:
-        self.update_status_line()
+    def watch_end_hour(self, old_value: int, new_value: int) -> None:
+        self._save_settings()
 
     # Actions
     def action_force_refresh(self) -> None:
@@ -208,7 +272,8 @@ class UnscheduleApp(App):
                 self.start_hour = new_start
                 self.run_analysis()
             except Exception as ex:
-                self._safe_update("#report_panel", f"[bold yellow]Invalid start time ({result}): {ex}[/]")
+                self._safe_update(
+                    "#report_panel", f"[bold yellow]Invalid start time ({result}): {ex}[/]")
 
         self.push_screen(TimePrompt("Enter Start Time:"), _apply)
 
@@ -223,6 +288,7 @@ class UnscheduleApp(App):
                 self.end_hour = new_end
                 self.run_analysis()
             except Exception as ex:
-                self._safe_update("#report_panel", f"[bold yellow]Invalid end time ({result}): {ex}[/]")
+                self._safe_update(
+                    "#report_panel", f"[bold yellow]Invalid end time ({result}): {ex}[/]")
 
         self.push_screen(TimePrompt("Enter End Time:"), _apply)
