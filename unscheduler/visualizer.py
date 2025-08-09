@@ -17,7 +17,7 @@ def time_to_float(time_str: str) -> float:
 
 def get_text_color_for_bg(hex_color: str) -> str:
     h = hex_color.lstrip("#")
-    r, g, b = tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))
+    r, g, b = tuple(int(h[i: i + 2], 16) for i in (0, 2, 4))
     luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
     return "black" if luminance > 0.5 else "white"
 
@@ -67,11 +67,14 @@ def draw_events_on_grid(ax, events: list, start_h: int, end_h: int):
                 text_color = get_text_color_for_bg(color)
                 # Evening part on the original day
                 if max(s, start_h) < min(24.0, end_h):
+                    rect_start = max(s, start_h)
+                    rect_end = min(24.0, end_h)
+
                     ax.add_patch(
                         patches.Rectangle(
-                            (day_index, max(s, start_h)),
+                            (day_index, rect_start),
                             1,
-                            min(24.0, end_h) - max(s, start_h),
+                            rect_end - rect_start,
                             facecolor=color,
                             edgecolor="black",
                             linewidth=BLOCK_BORDER_WIDTH,
@@ -79,25 +82,32 @@ def draw_events_on_grid(ax, events: list, start_h: int, end_h: int):
                             zorder=3,
                         )
                     )
+
+                    # Fix: Position text within visible rectangle
+                    text_y = rect_start + 0.1
                     ax.text(
                         day_index + 0.5,
-                        s + 0.1,
+                        text_y,
                         event["event"],
                         ha="center",
                         va="top",
                         color=text_color,
                         fontsize=8,
-                        weight="semibold",
+                        weight="normal",
                         zorder=5,
                     )
+
                 # Morning part on the next day
-                next_day_index = (day_index + 1) % 7
                 if max(0.0, start_h) < min(e, end_h):
+                    next_day_index = (day_index + 1) % 7
+                    rect_start = max(0.0, start_h)
+                    rect_end = min(e, end_h)
+
                     ax.add_patch(
                         patches.Rectangle(
-                            (next_day_index, max(0.0, start_h)),
+                            (next_day_index, rect_start),
                             1,
-                            min(e, end_h) - max(0.0, start_h),
+                            rect_end - rect_start,
                             facecolor=color,
                             edgecolor="black",
                             linewidth=BLOCK_BORDER_WIDTH,
@@ -105,39 +115,51 @@ def draw_events_on_grid(ax, events: list, start_h: int, end_h: int):
                             zorder=3,
                         )
                     )
+
+                    # Fix: Position text within visible rectangle
+                    text_y = rect_start + 0.1
                     ax.text(
                         next_day_index + 0.5,
-                        e - 0.1,
+                        text_y,
                         event["event"],
                         ha="center",
-                        va="bottom",
+                        va="top",
                         color=text_color,
                         fontsize=8,
-                        weight="semibold",
+                        weight="normal",
                         zorder=5,
                     )
             else:
+                # Regular event (doesn't span midnight)
                 if max(s, start_h) < min(e, end_h):
+                    text_color = get_text_color_for_bg(color)
+                    rect_start = max(s, start_h)
+                    rect_end = min(e, end_h)
+
                     ax.add_patch(
                         patches.Rectangle(
-                            (day_index, max(s, start_h)),
+                            (day_index, rect_start),
                             1,
-                            min(e, end_h) - max(s, start_h),
+                            rect_end - rect_start,
                             facecolor=color,
                             edgecolor="black",
                             linewidth=BLOCK_BORDER_WIDTH,
                             alpha=0.7,
-                            zorder=3,
+                            zorder=5,
                         )
                     )
+
+                    # Fix: Position text within visible rectangle
+                    text_y = rect_start + 0.1
                     ax.text(
                         day_index + 0.5,
-                        s + (e - s) / 2,
-                        textwrap.fill(event["event"], 15),
+                        text_y,
+                        event["event"],
                         ha="center",
-                        va="center",
-                        color=get_text_color_for_bg(color),
+                        va="top",
+                        color=text_color,
                         fontsize=8,
+                        weight="normal",
                         zorder=5,
                     )
 
@@ -189,17 +211,22 @@ def create_calendar_pdf(
 
     # Day columns as minor gridlines
     ax.set_xticks(range(0, 8), minor=True)
-    ax.grid(True, which="minor", axis="x", linestyle="-", linewidth=0.9, zorder=1)
+    ax.grid(True, which="minor", axis="x",
+            linestyle="-", linewidth=0.9, zorder=1)
 
     # Weekend divider between Friday (index 4) and Saturday (index 5)
-    ax.axvline(x=5, color="green", linestyle="-", linewidth=1.5, alpha=0.8, zorder=1)
+    ax.axvline(x=5, color="green", linestyle="-",
+               linewidth=1.5, alpha=0.8, zorder=1)
 
     # Hour ticks and formatting
     ax.set_yticks(range(start_h, end_h + 1))
     ax.yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, pos: _format_hour_tick(v)))
-    ax.grid(True, which="major", axis="y", linestyle="--", linewidth=0.7, zorder=1)
-    ax.grid(True, which="minor", axis="y", linestyle=":", linewidth=0.5, zorder=1)
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(
+        lambda v, pos: _format_hour_tick(v)))
+    ax.grid(True, which="major", axis="y",
+            linestyle="--", linewidth=0.7, zorder=1)
+    ax.grid(True, which="minor", axis="y",
+            linestyle=":", linewidth=0.5, zorder=1)
 
     draw_events_on_grid(ax, events, start_h, end_h)
     ax.set_title(title, fontsize=16, pad=30)
