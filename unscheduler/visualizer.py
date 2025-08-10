@@ -6,6 +6,42 @@ import textwrap
 from datetime import datetime
 from .constants import BLOCK_BORDER_WIDTH
 
+# UFL periods for calendar labeling
+UFL_PERIODS_DISPLAY = {
+    'P1': (7.416667, 8.25),      # 7:25 to 8:15
+    'P2': (8.5, 9.333333),       # 8:30 to 9:20
+    'P3': (9.583333, 10.416667),  # 9:35 to 10:25
+    'P4': (10.666667, 11.5),     # 10:40 to 11:30
+    'P5': (11.75, 12.583333),    # 11:45 to 12:35
+    'P6': (12.833333, 13.666667),  # 12:50 to 1:40
+    'P7': (13.916667, 14.75),    # 1:55 to 2:45
+    'P8': (15.0, 15.833333),     # 3:00 to 3:50
+    'P9': (16.083333, 16.916667),  # 4:05 to 4:55
+    'P10': (17.166667, 18.0),    # 5:10 to 6:00
+    'P11': (18.25, 19.083333),   # 6:15 to 7:05
+    'PE1': (19.333333, 20.166667),  # 7:20 to 8:10
+    'PE2': (20.333333, 21.166667),  # 8:20 to 9:10
+    'PE3': (21.333333, 22.166667),  # 9:20 to 10:10
+}
+
+# UFL period mapping (string format for accurate times)
+UFL_PERIODS = {
+    'P1': ('07:25', '08:15'),
+    'P2': ('08:30', '09:20'),
+    'P3': ('09:35', '10:25'),
+    'P4': ('10:40', '11:30'),
+    'P5': ('11:45', '12:35'),
+    'P6': ('12:50', '13:40'),
+    'P7': ('13:55', '14:45'),
+    'P8': ('15:00', '15:50'),
+    'P9': ('16:05', '16:55'),
+    'P10': ('17:10', '18:00'),
+    'P11': ('18:15', '19:05'),
+    'PE1': ('19:20', '20:10'),
+    'PE2': ('20:20', '21:10'),
+    'PE3': ('21:20', '22:10'),
+}
+
 # Render-time mode for labels: "24h" or "12h"
 TIME_FORMAT_MODE = "24h"
 
@@ -218,15 +254,42 @@ def create_calendar_pdf(
     ax.axvline(x=5, color="green", linestyle="-",
                linewidth=1.5, alpha=0.8, zorder=1)
 
-    # Hour ticks and formatting
-    ax.set_yticks(range(start_h, end_h + 1))
-    ax.yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(
+    # Left axis (main) - UFL Periods with time annotations
+    # Replace the period labeling section with this:
+
+    # Left axis (main) - UFL Periods with time annotations
+    period_positions = []
+    for period, (start_time, end_time) in UFL_PERIODS_DISPLAY.items():
+        if start_h <= start_time <= end_h:
+            label_y = (start_time + end_time) / 2
+            period_positions.append(label_y)
+
+            # Get original time strings from UFL_PERIODS (avoid floating point errors)
+            start_orig, end_orig = UFL_PERIODS[period]
+
+            # Format using the 12h/24h toggle
+            time_str = f"{format_time_ampm(start_orig)}-{format_time_ampm(end_orig)}"
+
+            # Draw period label and time annotation
+            ax.text(-0.02, label_y - 0.005, period, fontsize=8, weight='normal',
+                    va='bottom', ha='right', color='black', transform=ax.get_yaxis_transform())
+            ax.text(-0.02, label_y + 0.005, time_str, fontsize=6,
+                    va='top', ha='right', color='gray', style='italic', transform=ax.get_yaxis_transform())
+
+    # Hide left axis ticks since we're drawing custom labels
+    ax.set_yticks([])
+
+    # Right axis (twinx) - Time with dashed grid lines
+    ax2 = ax.twinx()
+    ax2.set_ylim(end_h, start_h)
+    ax2.set_yticks(range(start_h, end_h + 1))
+    ax2.yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
+    ax2.yaxis.set_major_formatter(mticker.FuncFormatter(
         lambda v, pos: _format_hour_tick(v)))
-    ax.grid(True, which="major", axis="y",
-            linestyle="--", linewidth=0.7, zorder=1)
-    ax.grid(True, which="minor", axis="y",
-            linestyle=":", linewidth=0.5, zorder=1)
+    ax2.grid(True, which="major", axis="y",
+             linestyle="--", linewidth=0.7, zorder=1)
+    ax2.grid(True, which="minor", axis="y",
+             linestyle=":", linewidth=0.5, zorder=1)
 
     draw_events_on_grid(ax, events, start_h, end_h)
     ax.set_title(title, fontsize=16, pad=30)

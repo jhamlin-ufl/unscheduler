@@ -3,9 +3,42 @@ import re
 from dateutil.parser import parse
 from .constants import DAY_CODES, COLOR_PALETTE, DEFAULT_TRIGGER_COLOR
 
+# UFL period mapping
+UFL_PERIODS = {
+    'P1': ('07:25', '08:15'),
+    'P2': ('08:30', '09:20'),
+    'P3': ('09:35', '10:25'),
+    'P4': ('10:40', '11:30'),
+    'P5': ('11:45', '12:35'),
+    'P6': ('12:50', '13:40'),
+    'P7': ('13:55', '14:45'),
+    'P8': ('15:00', '15:50'),
+    'P9': ('16:05', '16:55'),
+    'P10': ('17:10', '18:00'),
+    'P11': ('18:15', '19:05'),
+    'PE1': ('19:20', '20:10'),
+    'PE2': ('20:20', '21:10'),
+    'PE3': ('21:20', '22:10'),
+}
+
+
+def expand_periods(line):
+    """Expand UFL period shortcuts (P1, P2, etc.) to actual times."""
+    words = line.split()
+    for i, word in enumerate(words):
+        if word.upper() in UFL_PERIODS:
+            start_time, end_time = UFL_PERIODS[word.upper()]
+            # Replace period with start and end times
+            words[i:i+1] = [start_time, end_time]
+            break
+    return ' '.join(words)
+
 # --- ColorAssigner class is unchanged ---
+
+
 class ColorAssigner:
     """Manages color assignments for categories."""
+
     def __init__(self, palette):
         self.palette = palette
         self.manual_color_map = {}
@@ -21,12 +54,14 @@ class ColorAssigner:
             return self.manual_color_map[category]
         if category not in self.auto_color_map:
             if not self.palette_cycled and self.next_color_index >= len(self.palette):
-                print(f"Warning: Reached end of {len(self.palette)}-color palette. Colors will be reused.")
+                print(
+                    f"Warning: Reached end of {len(self.palette)}-color palette. Colors will be reused.")
                 self.palette_cycled = True
             color = self.palette[self.next_color_index % len(self.palette)]
             self.auto_color_map[category] = color
             self.next_color_index += 1
         return self.auto_color_map[category]
+
 
 def _parse_content(file_stream) -> (list, set, list, bool):
     """Internal parsing function that works on any file-like object."""
@@ -38,7 +73,8 @@ def _parse_content(file_stream) -> (list, set, list, bool):
 
     for i, line in enumerate(file_stream, 1):
         line = line.strip()
-        if not line or line.startswith('#'): continue
+        if not line or line.startswith('#'):
+            continue
 
         if line.strip().lower() == '[non-work-definition]':
             in_non_work_section = True
@@ -67,38 +103,53 @@ def _parse_content(file_stream) -> (list, set, list, bool):
                 inline_category = inline_match.group(1)
                 categories_found.add(inline_category)
                 line = line[:inline_match.start()].strip()
-            
+                line = expand_periods(line)
+
             words = line.split()
-            if len(words) < 3: continue
+            if len(words) < 3:
+                continue
 
             is_trigger = True
-            try: parse(words[3]); is_trigger = False
-            except (ValueError, IndexError): is_trigger = True
+            try:
+                parse(words[3])
+                is_trigger = False
+            except (ValueError, IndexError):
+                is_trigger = True
 
             recurrence, day_str = words[0], words[1].upper()
             for day_char in day_str:
-                if day_char not in DAY_CODES: continue
-                
+                if day_char not in DAY_CODES:
+                    continue
+
                 event_base = {"recurrence": recurrence, "day_code": day_char}
                 if is_trigger:
-                    event = {**event_base, "type": "trigger", "time": parse(words[2]).strftime('%H:%M'), "event": ' '.join(words[3:])}
-                    if inline_category: event["category"], event["color"] = inline_category, color_assigner.get_color(inline_category)
-                    else: event["category"], event["color"] = None, DEFAULT_TRIGGER_COLOR
+                    event = {**event_base, "type": "trigger", "time": parse(
+                        words[2]).strftime('%H:%M'), "event": ' '.join(words[3:])}
+                    if inline_category:
+                        event["category"], event["color"] = inline_category, color_assigner.get_color(
+                            inline_category)
+                    else:
+                        event["category"], event["color"] = None, DEFAULT_TRIGGER_COLOR
                 else:
-                    start_time, end_time = parse(words[2]).time(), parse(words[3]).time()
+                    start_time, end_time = parse(
+                        words[2]).time(), parse(words[3]).time()
                     event_category = inline_category or current_category
-                    if event_category: categories_found.add(event_category)
-                    event = {**event_base, "type": "block", "start": start_time.strftime('%H:%M'), "end": end_time.strftime('%H:%M'), "event": ' '.join(words[4:]), "category": event_category, "color": color_assigner.get_color(event_category) if event_category else 'gray', "spans_midnight": end_time < start_time}
+                    if event_category:
+                        categories_found.add(event_category)
+                    event = {**event_base, "type": "block", "start": start_time.strftime('%H:%M'), "end": end_time.strftime('%H:%M'), "event": ' '.join(
+                        words[4:]), "category": event_category, "color": color_assigner.get_color(event_category) if event_category else 'gray', "spans_midnight": end_time < start_time}
                 commitments.append(event)
         except Exception as e:
             print(f"Error on line {i}: '{line}' -> {e}")
             parsing_errors_found = True
     return commitments, categories_found, non_work_categories, parsing_errors_found
 
+
 def parse_schedule_file(filename: str):
     """Public function to parse a schedule from a file on disk."""
     with open(filename, 'r') as f:
         return _parse_content(f)
+
 
 def get_events_for_week(all_commitments: list, week_type: str) -> list:
     """Filters the master commitment list for a specific week type ('A' or 'B')."""
