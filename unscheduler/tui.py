@@ -90,7 +90,8 @@ class SettingsManager:
             'orientation': 'Landscape',
             'time_format': '24h',
             'start_hour': 3,
-            'end_hour': 22
+            'end_hour': 22,
+            'show_weekends': True
         }
 
     def load_settings(self):
@@ -122,6 +123,7 @@ class UnscheduleApp(App):
         ("s", "set_start_hour", "Set Start Hour"),
         ("e", "set_end_hour", "Set End Hour"),
         ("h", "toggle_time_format", "Time Format"),
+        ("w", "toggle_weekends", "Weekends"),
         ("r", "force_refresh", "Refresh"),
         ("q", "quit", "Quit"),
     ]
@@ -131,6 +133,7 @@ class UnscheduleApp(App):
     time_format = reactive("24h")  # "24h" or "12h"
     start_hour = reactive(3)
     end_hour = reactive(22)
+    show_weekends = reactive(True)
     last_file_mod_time = reactive(datetime.now())
     last_pdf_gen_time = reactive(datetime.now())
 
@@ -149,6 +152,7 @@ class UnscheduleApp(App):
         self.time_format = saved_settings['time_format']
         self.start_hour = saved_settings['start_hour']
         self.end_hour = saved_settings['end_hour']
+        self.show_weekends = saved_settings['show_weekends']
 
     def _save_settings(self):
         """Save current settings to disk."""
@@ -156,7 +160,8 @@ class UnscheduleApp(App):
             'orientation': self.orientation,
             'time_format': self.time_format,
             'start_hour': self.start_hour,
-            'end_hour': self.end_hour
+            'end_hour': self.end_hour,
+            'show_weekends': self.show_weekends
         }
         self.settings_manager.save_settings(current_settings)
 
@@ -194,7 +199,8 @@ class UnscheduleApp(App):
             pass
 
     def update_status_line(self) -> None:
-        status = f"Orientation: {self.orientation} | Time Range: {self.start_hour:02d}:00 to {self.end_hour:02d}:00 | Time Format: {self.time_format}"
+        weekends_status = "On" if self.show_weekends else "Off"
+        status = f"Orientation: {self.orientation} | Time Range: {self.start_hour:02d}:00 to {self.end_hour:02d}:00 | Time Format: {self.time_format} | Weekends: {weekends_status}"
         self._safe_update("#status_label", status)
 
     def run_analysis(self) -> None:
@@ -219,10 +225,10 @@ class UnscheduleApp(App):
             figsize = (8.5, 11) if self.orientation == "Portrait" else (11, 8.5)
             week_a_events = get_events_for_week(self.all_commitments, "A")
             create_calendar_pdf(week_a_events, "Week A", self.start_hour,
-                                self.end_hour, self.time_format, figsize)
+                                self.end_hour, self.time_format, figsize, self.show_weekends)
             week_b_events = get_events_for_week(self.all_commitments, "B")
             create_calendar_pdf(week_b_events, "Week B", self.start_hour,
-                                self.end_hour, self.time_format, figsize)
+                                self.end_hour, self.time_format, figsize, self.show_weekends)
             self.last_pdf_gen_time = datetime.now()
             self._safe_update(
                 "#pdf_gen_label",
@@ -232,6 +238,7 @@ class UnscheduleApp(App):
                 "#file_mod_label",
                 f"Source File Modified:  {self.last_file_mod_time.strftime('%Y-%m-%d %H:%M:%S')} ({humanize.naturaltime(self.last_file_mod_time)})",
             )
+            self.update_status_line()
         except Exception as e:
             self._safe_update(
                 "#report_panel", f"[bold red]An error occurred during analysis:\n{e}[/]")
@@ -249,6 +256,9 @@ class UnscheduleApp(App):
     def watch_end_hour(self, old_value: int, new_value: int) -> None:
         self._save_settings()
 
+    def watch_show_weekends(self, old_value: bool, new_value: bool) -> None:
+        self._save_settings()
+
     # Actions
     def action_force_refresh(self) -> None:
         self.run_analysis()
@@ -259,6 +269,10 @@ class UnscheduleApp(App):
 
     def action_toggle_time_format(self) -> None:
         self.time_format = "12h" if self.time_format == "24h" else "24h"
+        self.run_analysis()
+
+    def action_toggle_weekends(self) -> None:
+        self.show_weekends = not self.show_weekends
         self.run_analysis()
 
     def action_set_start_hour(self) -> None:

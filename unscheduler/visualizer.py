@@ -85,12 +85,12 @@ def _format_hour_tick(v: float) -> str:
     return f"{h12} {suffix}"
 
 
-def draw_events_on_grid(ax, events: list, start_h: int, end_h: int):
-    """Draws events, clipping them to the visible time window."""
+def draw_events_on_grid(ax, events: list, start_h: int, end_h: int, num_days: int):
+    """Draws events, clipping them to the visible time window and day range."""
     day_map = {code: i for i, code in enumerate("MTWRFSU")}
     for event in events:
         day_index = day_map.get(event["day_code"])
-        if day_index is None:
+        if day_index is None or day_index >= num_days:
             continue
 
         if event["type"] == "block":
@@ -102,7 +102,7 @@ def draw_events_on_grid(ax, events: list, start_h: int, end_h: int):
             if event.get("spans_midnight", False):
                 text_color = get_text_color_for_bg(color)
                 # Evening part on the original day
-                if max(s, start_h) < min(24.0, end_h):
+                if max(s, start_h) < min(24.0, end_h) and day_index < num_days:
                     rect_start = max(s, start_h)
                     rect_end = min(24.0, end_h)
 
@@ -134,8 +134,8 @@ def draw_events_on_grid(ax, events: list, start_h: int, end_h: int):
                     )
 
                 # Morning part on the next day
-                if max(0.0, start_h) < min(e, end_h):
-                    next_day_index = (day_index + 1) % 7
+                next_day_index = (day_index + 1) % 7
+                if max(0.0, start_h) < min(e, end_h) and next_day_index < num_days:
                     rect_start = max(0.0, start_h)
                     rect_end = min(e, end_h)
 
@@ -223,6 +223,7 @@ def create_calendar_pdf(
     end_h: int,
     time_format: str,
     figsize: tuple,
+    show_weekends: bool = True,
 ):
     """Creates and saves a single week's calendar PDF."""
     global TIME_FORMAT_MODE
@@ -238,24 +239,28 @@ def create_calendar_pdf(
         "Saturday",
         "Sunday",
     ]
+    
+    if not show_weekends:
+        days = days[:5]  # Only weekdays
+    
+    num_days = len(days)
 
-    ax.set_xlim(0, 7)
-    ax.set_xticks([i + 0.5 for i in range(len(days))])
+    ax.set_xlim(0, num_days)
+    ax.set_xticks([i + 0.5 for i in range(num_days)])
     ax.set_xticklabels(days, fontsize=9)
     ax.set_xlabel("")
     ax.set_ylim(end_h, start_h)
 
     # Day columns as minor gridlines
-    ax.set_xticks(range(0, 8), minor=True)
+    ax.set_xticks(range(0, num_days + 1), minor=True)
     ax.grid(True, which="minor", axis="x",
             linestyle="-", linewidth=0.9, zorder=1)
 
     # Weekend divider between Friday (index 4) and Saturday (index 5)
-    ax.axvline(x=5, color="green", linestyle="-",
-               linewidth=1.5, alpha=0.8, zorder=1)
-
-    # Left axis (main) - UFL Periods with time annotations
-    # Replace the period labeling section with this:
+    # Only draw if weekends are shown
+    if show_weekends:
+        ax.axvline(x=5, color="green", linestyle="-",
+                   linewidth=1.5, alpha=0.8, zorder=1)
 
     # Left axis (main) - UFL Periods with time annotations
     period_positions = []
@@ -291,7 +296,7 @@ def create_calendar_pdf(
     ax2.grid(True, which="minor", axis="y",
              linestyle=":", linewidth=0.5, zorder=1)
 
-    draw_events_on_grid(ax, events, start_h, end_h)
+    draw_events_on_grid(ax, events, start_h, end_h, num_days)
     ax.set_title(title, fontsize=16, pad=30)
 
     # Tight layout with margins for labels
