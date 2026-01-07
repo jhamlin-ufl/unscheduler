@@ -3,6 +3,7 @@ import os
 import io
 import re
 import json
+import subprocess
 from pathlib import Path
 import contextlib
 import humanize
@@ -137,11 +138,13 @@ class UnscheduleApp(App):
     last_file_mod_time = reactive(datetime.now())
     last_pdf_gen_time = reactive(datetime.now())
 
-    def __init__(self, schedule_file: str):
+    def __init__(self, schedule_file: str, on_first_render_callback=None):
         super().__init__()
         self.schedule_file_path = schedule_file
         self.all_commitments, self.all_categories, self.non_work_cats = [], set(), []
         self._reload_timer = None
+        self.on_first_render_callback = on_first_render_callback
+        self._first_render_done = False
 
         # Load persistent settings
         self.settings_manager = SettingsManager()
@@ -229,7 +232,21 @@ class UnscheduleApp(App):
             week_b_events = get_events_for_week(self.all_commitments, "B")
             create_calendar_pdf(week_b_events, "Week B", self.start_hour,
                                 self.end_hour, self.time_format, figsize, self.show_weekends)
+            
+            # Combine PDFs using pdftk
+            try:
+                subprocess.run(['pdftk', 'week_a.pdf', 'week_b.pdf', 'cat', 'output', 'weeks.pdf'], 
+                             check=True, capture_output=True)
+            except Exception:
+                pass  # Silent fail if pdftk not available
+            
             self.last_pdf_gen_time = datetime.now()
+            
+            # Trigger callback on first render only
+            if not self._first_render_done and self.on_first_render_callback:
+                self._first_render_done = True
+                self.on_first_render_callback()
+            
             self._safe_update(
                 "#pdf_gen_label",
                 f"Calendars Generated:  {self.last_pdf_gen_time.strftime('%Y-%m-%d %H:%M:%S')} ({humanize.naturaltime(self.last_pdf_gen_time)})",
